@@ -74,6 +74,9 @@ public class ClientMain {
 
         String name = parsed.name;
         String[] args = parsed.args;
+        if (requiresAuthorization(name) && !isAuthorized()) {
+            throw new CommandExecutionException("authorization required");
+        }
 
         Organization.Draft draft = null;
         Integer targetId = null;
@@ -139,7 +142,16 @@ public class ClientMain {
                 currentPassword
         );
     }
+    private static boolean isAuthorized() {
+        return currentUsername != null && currentPassword != null;
+    }
 
+    private static boolean requiresAuthorization(String commandName) {
+        return !commandName.equals("register")
+                && !commandName.equals("login")
+                && !commandName.equals("help");
+    }
+    
     private static ParsedCommand parse(String line) {
         if (line.startsWith("execute_script")) {
             String rest = line.substring("execute_script".length()).trim();
