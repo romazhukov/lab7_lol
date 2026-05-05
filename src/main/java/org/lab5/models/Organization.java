@@ -20,6 +20,8 @@ public class Organization implements Comparable<Organization>, Serializable {
     private final long employeesCount;
     private final OrganizationType type;
     private final Address postalAddress;
+    private final Integer ownerId;
+    private final String ownerUsername;
 
     @JsonCreator
     public Organization(
@@ -30,7 +32,9 @@ public class Organization implements Comparable<Organization>, Serializable {
             @JsonProperty("annualTurnover") double annualTurnover,
             @JsonProperty("employeesCount") long employeesCount,
             @JsonProperty("type") OrganizationType type,
-            @JsonProperty("postalAddress") Address postalAddress
+            @JsonProperty("postalAddress") Address postalAddress,
+            @JsonProperty("ownerId") Integer ownerId,
+            @JsonProperty("ownerUsername") String ownerUsername
     ) {
         this.id = id;
         this.name = name;
@@ -40,6 +44,8 @@ public class Organization implements Comparable<Organization>, Serializable {
         this.employeesCount = employeesCount;
         this.type = type;
         this.postalAddress = postalAddress;
+        this.ownerId = ownerId;
+        this.ownerUsername = ownerUsername;
     }
 
     public void validate() throws ValidationException {
@@ -106,13 +112,23 @@ public class Organization implements Comparable<Organization>, Serializable {
         return postalAddress;
     }
 
+    public Integer getOwnerId() {
+        return ownerId;
+    }
+
+    public String getOwnerUsername() {
+        return ownerUsername;
+    }
+
     public Organization copyPreservingIdAndCreation(
             String name,
             Coordinates coordinates,
             double annualTurnover,
             long employeesCount,
             OrganizationType type,
-            Address postalAddress
+            Address postalAddress,
+            Integer ownerId,
+            String ownerUsername
     ) {
         return new Organization(
                 this.id,
@@ -122,7 +138,9 @@ public class Organization implements Comparable<Organization>, Serializable {
                 annualTurnover,
                 employeesCount,
                 type,
-                postalAddress
+                postalAddress,
+                ownerId,
+                ownerUsername
         );
     }
 
@@ -170,6 +188,7 @@ public class Organization implements Comparable<Organization>, Serializable {
                 ", employeesCount=" + employeesCount +
                 ", type=" + type +
                 ", postalAddress=" + postalAddress +
+                ", ownerUsername='" + ownerUsername + '\'' +
                 '}';
     }
 
@@ -244,7 +263,9 @@ public class Organization implements Comparable<Organization>, Serializable {
                     annualTurnover,
                     employeesCount,
                     type,
-                    postalAddress
+                    postalAddress,
+                    null,
+                    null
             );
         }
     }

@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.lab6</groupId>
-    <artifactId>lab6_lol</artifactId>
+    <artifactId>lab7_lol</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>lab6_lol</name>
-    <description>Client-server app: PriorityQueue of Organization, JSON persistence</description>
+    <name>lab7_lol</name>
+    <description>Client-server app: PriorityQueue of Organization, PostgreSQL persistence</description>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -28,10 +28,15 @@
             <artifactId>jackson-datatype-jsr310</artifactId>
             <version>2.17.2</version>
         </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.7</version>
+        </dependency>
     </dependencies>
 
     <build>
-        <finalName>lab6_lol-1.0-SNAPSHOT</finalName>
+        <finalName>lab7_lol-1.0-SNAPSHOT</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

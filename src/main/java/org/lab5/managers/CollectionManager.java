@@ -18,7 +18,7 @@ public class CollectionManager {
     private final PriorityQueue<Organization> queue = new PriorityQueue<>();
     private final ZonedDateTime collectionInitializationTime = ZonedDateTime.now();
 
-    public void replaceAll(List<Organization> items) throws ValidationException {
+    public synchronized void replaceAll(List<Organization> items) throws ValidationException {
         Set<Integer> ids = new HashSet<>();
         for (Organization organization : items) {
             if (!ids.add(organization.getId())) {
@@ -31,7 +31,7 @@ public class CollectionManager {
         queue.addAll(items);
     }
 
-    public Organization addNew(Organization.Draft draft, IdGenerator idGenerator, ZonedDateTime creationMoment)
+    public synchronized Organization addNew(Organization.Draft draft, IdGenerator idGenerator, ZonedDateTime creationMoment)
             throws ValidationException {
         draft.validate();
 
@@ -43,7 +43,7 @@ public class CollectionManager {
         return organization;
     }
 
-    public Organization update(int id, Organization.Draft draft) throws ValidationException {
+    public synchronized Organization update(int id, Organization.Draft draft) throws ValidationException {
         draft.validate();
 
         Organization existing = findById(id);
@@ -59,7 +59,9 @@ public class CollectionManager {
                 draft.getAnnualTurnover(),
                 draft.getEmployeesCount(),
                 draft.getType(),
-                draft.getPostalAddress()
+                draft.getPostalAddress(),
+                existing.getOwnerId(),
+                existing.getOwnerUsername()
         );
 
         updated.validate();
@@ -67,7 +69,7 @@ public class CollectionManager {
         return updated;
     }
 
-    public boolean removeById(int id) {
+    public synchronized boolean removeById(int id) {
         Organization target = findById(id);
         if (target == null) {
             return false;
@@ -77,15 +79,15 @@ public class CollectionManager {
         return true;
     }
 
-    public void clear() {
+    public synchronized void clear() {
         queue.clear();
     }
 
-    public Organization removeHead() {
+    public synchronized Organization removeHead() {
         return queue.poll();
     }
 
-    public Organization addIfMin(Organization.Draft draft, IdGenerator idGenerator, ZonedDateTime creationMoment)
+    public synchronized Organization addIfMin(Organization.Draft draft, IdGenerator idGenerator, ZonedDateTime creationMoment)
             throws ValidationException {
         draft.validate();
 
@@ -96,7 +98,7 @@ public class CollectionManager {
         return null;
     }
 
-    private boolean isDraftLessThanMin(Organization.Draft draft) {
+    private synchronized boolean isDraftLessThanMin(Organization.Draft draft) {
         Organization min = queue.peek();
 
         int result = Double.compare(draft.getAnnualTurnover(), min.getAnnualTurnover());
@@ -112,7 +114,7 @@ public class CollectionManager {
         return draft.getName().compareTo(min.getName()) < 0;
     }
 
-    public int removeLower(Organization.Draft thresholdDraft) throws ValidationException {
+    public synchronized int removeLower(Organization.Draft thresholdDraft) throws ValidationException {
         thresholdDraft.validate();
 
         Organization threshold = thresholdDraft.toOrganization(Integer.MAX_VALUE, ZonedDateTime.now());
@@ -134,7 +136,7 @@ public class CollectionManager {
         return removed;
     }
 
-    public int removeAllByPostalAddress(Address address) {
+    public synchronized int removeAllByPostalAddress(Address address) {
         List<Organization> toKeep = new ArrayList<>();
         int removed = 0;
 
@@ -152,7 +154,7 @@ public class CollectionManager {
         return removed;
     }
 
-    public int countGreaterThanType(OrganizationType reference) {
+    public synchronized int countGreaterThanType(OrganizationType reference) {
         if (reference == null) {
             throw new IllegalArgumentException("reference type must not be null");
         }
@@ -170,11 +172,11 @@ public class CollectionManager {
         return count;
     }
 
-    public List<Organization> snapshotAll() {
+    public synchronized List<Organization> snapshotAll() {
         return new ArrayList<>(queue);
     }
 
-    public List<Organization> getSortedView() {
+    public synchronized List<Organization> getSortedView() {
         PriorityQueue<Organization> copy = new PriorityQueue<>(queue);
         List<Organization> result = new ArrayList<>();
 
@@ -185,7 +187,7 @@ public class CollectionManager {
         return result;
     }
 
-    public int size() {
+    public synchronized int size() {
         return queue.size();
     }
 
@@ -197,7 +199,7 @@ public class CollectionManager {
         return queue.getClass().getName();
     }
 
-    public Organization findById(int id) {
+    public synchronized Organization findById(int id) {
         for (Organization organization : queue) {
             if (organization.getId() == id) {
                 return organization;
@@ -217,5 +219,56 @@ public class CollectionManager {
         );
 
         return Comparator.nullsLast(comparator.reversed());
+    }
+
+    public synchronized void addExisting(Organization organization) {
+        queue.add(organization);
+    }
+
+    public synchronized int removeByOwner(int ownerId) {
+        List<Organization> toKeep = new ArrayList<>();
+        int removed = 0;
+        for (Organization organization : queue) {
+            if (organization.getOwnerId() != null && organization.getOwnerId() == ownerId) {
+                removed++;
+            } else {
+                toKeep.add(organization);
+            }
+        }
+        queue.clear();
+        queue.addAll(toKeep);
+        return removed;
+    }
+
+    public synchronized int removeLowerByOwner(Organization threshold, int ownerId) {
+        List<Organization> toKeep = new ArrayList<>();
+        int removed = 0;
+        for (Organization organization : queue) {
+            boolean ownerMatches = organization.getOwnerId() != null && organization.getOwnerId() == ownerId;
+            if (ownerMatches && organization.compareTo(threshold) < 0) {
+                removed++;
+            } else {
+                toKeep.add(organization);
+            }
+        }
+        queue.clear();
+        queue.addAll(toKeep);
+        return removed;
+    }
+
+    public synchronized int removeAllByPostalAddressAndOwner(Address address, int ownerId) {
+        List<Organization> toKeep = new ArrayList<>();
+        int removed = 0;
+        for (Organization organization : queue) {
+            boolean ownerMatches = organization.getOwnerId() != null && organization.getOwnerId() == ownerId;
+            if (ownerMatches && Objects.equals(organization.getPostalAddress(), address)) {
+                removed++;
+            } else {
+                toKeep.add(organization);
+            }
+        }
+        queue.clear();
+        queue.addAll(toKeep);
+        return removed;
     }
 }

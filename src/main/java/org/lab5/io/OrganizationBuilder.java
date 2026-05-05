@@ -22,7 +22,8 @@ public class OrganizationBuilder {
 
         String name = inputManager.readValidatedLine(
                 "name (non-empty): ",
-                raw -> (raw == null || raw.trim().isBlank()) ? "name must not be empty" : null).trim();
+                raw -> raw == null || raw.trim().isBlank() ? "name must not be empty" : null
+        ).trim();
 
         console.println("--- Coordinates ---");
         int x = inputManager.readInt("x (int, required): ");
@@ -39,14 +40,10 @@ public class OrganizationBuilder {
                 annualTurnover,
                 employeesCount,
                 type,
-                postalAddress);
+                postalAddress
+        );
 
-        try {
-            draft.validate();
-        } catch (ValidationException e) {
-            throw new CommandExecutionException(e.getMessage());
-        }
-
+        validateDraft(draft);
         return draft;
     }
 
@@ -71,13 +68,13 @@ public class OrganizationBuilder {
         String turnoverInput = readLineOrThrow();
         double annualTurnover = isEmpty(turnoverInput)
                 ? existing.getAnnualTurnover()
-                : parseDouble(turnoverInput, "annualTurnover must be a number");
+                : parsePositiveDouble(turnoverInput, "annualTurnover must be > 0");
 
         console.print("employeesCount [" + existing.getEmployeesCount() + "] (empty = keep): ");
         String employeesInput = readLineOrThrow();
         long employeesCount = isEmpty(employeesInput)
                 ? existing.getEmployeesCount()
-                : parseLong(employeesInput, "employeesCount must be an integer");
+                : parsePositiveLong(employeesInput, "employeesCount must be > 0");
 
         OrganizationType type = readTypeForUpdate(existing.getType());
         Address postalAddress = readAddressForUpdate(existing.getPostalAddress());
@@ -88,14 +85,10 @@ public class OrganizationBuilder {
                 annualTurnover,
                 employeesCount,
                 type,
-                postalAddress);
+                postalAddress
+        );
 
-        try {
-            draft.validate();
-        } catch (ValidationException e) {
-            throw new CommandExecutionException(e.getMessage());
-        }
-
+        validateDraft(draft);
         return draft;
     }
 
@@ -109,19 +102,8 @@ public class OrganizationBuilder {
 
         String street = inputManager.readValidatedLine(
                 "street (<=190 chars, empty = skip whole address): ",
-                raw -> {
-                    if (raw == null) {
-                        return "unexpected input";
-                    }
-                    String s = raw.trim();
-                    if (s.isEmpty()) {
-                        return null;
-                    }
-                    if (s.length() > 190) {
-                        return "street length must be <= 190";
-                    }
-                    return null;
-                }).trim();
+                raw -> checkLength(raw, 190, "street length must be <= 190")
+        ).trim();
 
         if (street.isEmpty()) {
             return null;
@@ -129,26 +111,14 @@ public class OrganizationBuilder {
 
         String zip = inputManager.readValidatedLine(
                 "zipCode (<=30 chars, empty allowed as null): ",
-                raw -> {
-                    if (raw == null) {
-                        return "unexpected input";
-                    }
-                    String s = raw.trim();
-                    if (s.length() > 30) {
-                        return "zipCode length must be <= 30";
-                    }
-                    return null;
-                }).trim();
+                raw -> checkLength(raw, 30, "zipCode length must be <= 30")
+        ).trim();
 
         if (zip.isEmpty()) {
             zip = null;
         }
 
-        try {
-            return Validators.buildAddress(street, zip);
-        } catch (ValidationException e) {
-            throw new CommandExecutionException(e.getMessage());
-        }
+        return buildAddress(street, zip);
     }
 
     private Address readAddressForUpdate(Address oldAddress) throws CommandExecutionException {
@@ -177,30 +147,22 @@ public class OrganizationBuilder {
         console.print("zipCode [" + oldZip + "] (empty = keep): ");
         String zipInput = readLineOrThrow();
 
-        String zip;
-        if (isEmpty(zipInput)) {
-            zip = oldAddress == null ? null : oldAddress.getZipCode();
-        } else {
-            zip = zipInput.trim();
-        }
+        String zip = isEmpty(zipInput)
+                ? oldAddress == null ? null : oldAddress.getZipCode()
+                : zipInput.trim();
 
         if (zip != null && zip.length() > 30) {
             throw new CommandExecutionException("zipCode length must be <= 30");
         }
 
-        try {
-            return Validators.buildAddress(street, zip);
-        } catch (ValidationException e) {
-            throw new CommandExecutionException(e.getMessage());
-        }
+        return buildAddress(street, zip);
     }
 
     private OrganizationType readTypeForUpdate(OrganizationType oldType) throws CommandExecutionException {
         String current = oldType == null ? "null" : oldType.name();
 
         while (true) {
-            console.print(
-                    "type [" + current + "] (PUBLIC, TRUST, PRIVATE_LIMITED_COMPANY, empty = keep, '-' = null): ");
+            console.print("type [" + current + "] (PUBLIC, TRUST, PRIVATE_LIMITED_COMPANY, empty = keep, '-' = null): ");
             String raw = readLineOrThrow();
 
             if (isEmpty(raw)) {
@@ -222,62 +184,18 @@ public class OrganizationBuilder {
         }
     }
 
-    private String readLineOrThrow() throws CommandExecutionException {
-        String line = inputManager.readLine();
-        if (line == null) {
-            throw new CommandExecutionException("unexpected end of input");
-        }
-        return line;
-    }
-
-    private boolean isEmpty(String s) {
-        return s == null || s.trim().isEmpty();
-    }
-
-    private int parseInt(String s, String error) throws CommandExecutionException {
-        try {
-            return Integer.parseInt(s.trim());
-        } catch (NumberFormatException e) {
-            throw new CommandExecutionException(error);
-        }
-    }
-
-    private float parseFloat(String s, String error) throws CommandExecutionException {
-        try {
-            return Float.parseFloat(s.trim());
-        } catch (NumberFormatException e) {
-            throw new CommandExecutionException(error);
-        }
-    }
-
-    private double parseDouble(String s, String error) throws CommandExecutionException {
-        try {
-            return Double.parseDouble(s.trim());
-        } catch (NumberFormatException e) {
-            throw new CommandExecutionException(error);
-        }
-    }
-
-    private long parseLong(String s, String error) throws CommandExecutionException {
-        try {
-            return Long.parseLong(s.trim());
-        } catch (NumberFormatException e) {
-            throw new CommandExecutionException(error);
-        }
-    }
-
     private double readPositiveDouble(String prompt) throws CommandExecutionException {
-    while (true) {
-        double value = inputManager.readDouble(prompt);
-        if (value > 0) {
-            return value;
-        }
-        console.printError("value must be > 0");
-        if (inputManager.isScriptMode()) {
-            throw new CommandExecutionException("script input error: value must be > 0");
+        while (true) {
+            double value = inputManager.readDouble(prompt);
+            if (value > 0) {
+                return value;
+            }
+            console.printError("value must be > 0");
+            if (inputManager.isScriptMode()) {
+                throw new CommandExecutionException("script input error: value must be > 0");
+            }
         }
     }
-}
 
     private long readPositiveLong(String prompt) throws CommandExecutionException {
         while (true) {
@@ -289,6 +207,92 @@ public class OrganizationBuilder {
             if (inputManager.isScriptMode()) {
                 throw new CommandExecutionException("script input error: value must be > 0");
             }
+        }
+    }
+
+    private double parsePositiveDouble(String value, String error) throws CommandExecutionException {
+        double result = parseDouble(value, error);
+        if (result <= 0) {
+            throw new CommandExecutionException(error);
+        }
+        return result;
+    }
+
+    private long parsePositiveLong(String value, String error) throws CommandExecutionException {
+        long result = parseLong(value, error);
+        if (result <= 0) {
+            throw new CommandExecutionException(error);
+        }
+        return result;
+    }
+
+    private String checkLength(String raw, int maxLength, String message) {
+        if (raw == null) {
+            return "unexpected input";
+        }
+        if (raw.trim().length() > maxLength) {
+            return message;
+        }
+        return null;
+    }
+
+    private Address buildAddress(String street, String zip) throws CommandExecutionException {
+        try {
+            return Validators.buildAddress(street, zip);
+        } catch (ValidationException e) {
+            throw new CommandExecutionException(e.getMessage());
+        }
+    }
+
+    private void validateDraft(Organization.Draft draft) throws CommandExecutionException {
+        try {
+            draft.validate();
+        } catch (ValidationException e) {
+            throw new CommandExecutionException(e.getMessage());
+        }
+    }
+
+    private String readLineOrThrow() throws CommandExecutionException {
+        String line = inputManager.readLine();
+        if (line == null) {
+            throw new CommandExecutionException("unexpected end of input");
+        }
+        return line;
+    }
+
+    private boolean isEmpty(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private int parseInt(String value, String error) throws CommandExecutionException {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            throw new CommandExecutionException(error);
+        }
+    }
+
+    private float parseFloat(String value, String error) throws CommandExecutionException {
+        try {
+            return Float.parseFloat(value.trim());
+        } catch (NumberFormatException e) {
+            throw new CommandExecutionException(error);
+        }
+    }
+
+    private double parseDouble(String value, String error) throws CommandExecutionException {
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException e) {
+            throw new CommandExecutionException(error);
+        }
+    }
+
+    private long parseLong(String value, String error) throws CommandExecutionException {
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            throw new CommandExecutionException(error);
         }
     }
 }

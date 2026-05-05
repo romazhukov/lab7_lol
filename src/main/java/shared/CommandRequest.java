@@ -5,7 +5,6 @@ import org.lab5.models.Organization;
 import org.lab5.models.OrganizationType;
 
 import java.io.Serializable;
-import java.util.Arrays;
 
 public class CommandRequest implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -16,6 +15,8 @@ public class CommandRequest implements Serializable {
     private final Integer targetId;
     private final Address address;
     private final OrganizationType organizationType;
+    private final String username;
+    private final String password;
 
     public CommandRequest(
             String name,
@@ -23,7 +24,9 @@ public class CommandRequest implements Serializable {
             Organization.Draft draft,
             Integer targetId,
             Address address,
-            OrganizationType organizationType
+            OrganizationType organizationType,
+            String username,
+            String password
     ) {
         this.name = name;
         this.args = args == null ? new String[0] : args;
@@ -31,6 +34,8 @@ public class CommandRequest implements Serializable {
         this.targetId = targetId;
         this.address = address;
         this.organizationType = organizationType;
+        this.username = username;
+        this.password = password;
     }
 
     public String getName() {
@@ -57,15 +62,11 @@ public class CommandRequest implements Serializable {
         return organizationType;
     }
 
-    @Override
-    public String toString() {
-        return "CommandRequest{" +
-                "name='" + name + '\'' +
-                ", args=" + Arrays.toString(args) +
-                ", draft=" + draft +
-                ", targetId=" + targetId +
-                ", address=" + address +
-                ", organizationType=" + organizationType +
-                '}';
+    public String getUsername() {
+        return username;
+    }
+
+    public String getPassword() {
+        return password;
     }
 }

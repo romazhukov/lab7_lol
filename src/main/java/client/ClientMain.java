@@ -11,7 +11,6 @@ import org.lab5.models.OrganizationType;
 import shared.CommandRequest;
 import shared.CommandResponse;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -20,157 +19,171 @@ import java.net.Socket;
 public class ClientMain {
     private static final String DEFAULT_HOST = "localhost";
     private static final int DEFAULT_PORT = 5555;
+    private static String currentUsername;
+    private static String currentPassword;
 
     public static void main(String[] args) {
         String host = args.length > 0 ? args[0] : DEFAULT_HOST;
-        int port = parsePort(args);
+        int port = args.length > 1 ? Integer.parseInt(args[1]) : DEFAULT_PORT;
 
         StandardConsole console = new StandardConsole();
         ScriptManager scriptManager = new ScriptManager();
         InputManager inputManager = new InputManager(console, scriptManager);
-        OrganizationBuilder organizationBuilder = new OrganizationBuilder(console, inputManager);
+        OrganizationBuilder builder = new OrganizationBuilder(console, inputManager);
 
         try (Socket socket = new Socket(host, port);
              ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
              ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
+
             console.println("Connected to server " + host + ":" + port);
-            runInteractiveLoop(console, inputManager, organizationBuilder, out, in);
+
+            while (true) {
+                console.print("$ ");
+                String line = inputManager.readLine();
+
+                if (line == null || line.trim().equals("exit")) {
+                    break;
+                }
+
+                line = line.trim();
+                if (line.isEmpty()) {
+                    continue;
+                }
+
+                try {
+                    CommandRequest request = makeRequest(line, builder, out, in);
+                    CommandResponse response = send(out, in, request);
+                    print(console, response);
+                    updateCredentials(request, response);
+                } catch (Exception e) {
+                    console.printError(e.getMessage());
+                }
+            }
         } catch (IOException e) {
             console.printError("Server is unavailable: " + e.getMessage());
         }
     }
 
-    private static void runInteractiveLoop(
-            StandardConsole console,
-            InputManager inputManager,
-            OrganizationBuilder organizationBuilder,
-            ObjectOutputStream out,
-            ObjectInputStream in
-    ) {
-        while (true) {
-            console.print("$ ");
-            String line = inputManager.readLine();
-            if (line == null) {
-                return;
-            }
-            line = line.trim();
-            if (line.isEmpty()) {
-                continue;
-            }
-            if ("exit".equals(line)) {
-                return;
-            }
-
-            CommandRequest request;
-            try {
-                ParsedCommand parsed = parseCommand(line);
-                request = buildRequest(parsed, organizationBuilder, out, in);
-            } catch (CommandExecutionException e) {
-                console.printError(e.getMessage());
-                continue;
-            } catch (IOException | ClassNotFoundException e) {
-                console.printError("Failed to prepare command: " + e.getMessage());
-                return;
-            }
-
-            try {
-                CommandResponse response = sendRequest(out, in, request);
-                printResponse(console, response);
-            } catch (EOFException e) {
-                console.printError("Connection closed by server");
-                return;
-            } catch (IOException | ClassNotFoundException e) {
-                console.printError("Failed to execute command: " + e.getMessage());
-                return;
-            }
-        }
-    }
-
-    private static ParsedCommand parseCommand(String line) {
-        String name;
-        String[] args;
-        if (line.startsWith("execute_script")) {
-            name = "execute_script";
-            String rest = line.substring("execute_script".length()).trim();
-            args = rest.isEmpty() ? new String[0] : new String[]{rest};
-        } else {
-            String[] parts = line.split("\\s+");
-            name = parts[0];
-            args = new String[Math.max(0, parts.length - 1)];
-            for (int i = 1; i < parts.length; i++) {
-                args[i - 1] = parts[i];
-            }
-        }
-        return new ParsedCommand(name, args);
-    }
-
-    private static CommandRequest buildRequest(
-            ParsedCommand parsed,
+    private static CommandRequest makeRequest(
+            String line,
             OrganizationBuilder builder,
             ObjectOutputStream out,
             ObjectInputStream in
-    ) throws CommandExecutionException, IOException, ClassNotFoundException {
+    ) throws Exception {
+        ParsedCommand parsed = parse(line);
+
         String name = parsed.name;
         String[] args = parsed.args;
+
         Organization.Draft draft = null;
         Integer targetId = null;
         Address address = null;
-        OrganizationType organizationType = null;
+        OrganizationType type = null;
 
-        if ("add".equals(name) || "add_if_min".equals(name) || "remove_lower".equals(name)) {
+        if (name.equals("add") || name.equals("add_if_min") || name.equals("remove_lower")) {
             draft = builder.readOrganizationDraft();
-        } else if ("update".equals(name)) {
+        }
+
+        if (name.equals("update")) {
             if (args.length != 1) {
                 throw new CommandExecutionException("usage: update <id>");
             }
-            try {
-                targetId = Integer.parseInt(args[0]);
-            } catch (NumberFormatException e) {
-                throw new CommandExecutionException("id must be an integer");
-            }
-            CommandResponse getResponse = sendRequest(
-                    out,
-                    in,
-                    new CommandRequest("__internal_get_by_id", new String[0], null, targetId, null, null)
+
+            targetId = parseId(args[0]);
+
+            CommandRequest getRequest = new CommandRequest(
+                    "__internal_get_by_id",
+                    new String[0],
+                    null,
+                    targetId,
+                    null,
+                    null,
+                    currentUsername,
+                    currentPassword
             );
-            if (!getResponse.isSuccess()) {
-                throw new CommandExecutionException(getResponse.getMessage());
+
+            CommandResponse response = send(out, in, getRequest);
+
+            if (!response.isSuccess()) {
+                throw new CommandExecutionException(response.getMessage());
             }
-            if (!(getResponse.getData() instanceof Organization existing)) {
-                throw new CommandExecutionException("Server returned invalid data for update");
-            }
-            draft = builder.readOrganizationDraftForUpdate(existing);
-        } else if ("remove_all_by_postal_address".equals(name)) {
+
+            Organization oldOrganization = (Organization) response.getData();
+            draft = builder.readOrganizationDraftForUpdate(oldOrganization);
+        }
+
+        if (name.equals("remove_all_by_postal_address")) {
             address = builder.readAddressFilter();
-        } else if ("count_greater_than_type".equals(name)) {
+        }
+
+        if (name.equals("count_greater_than_type")) {
             if (args.length != 1) {
                 throw new CommandExecutionException("usage: count_greater_than_type <type>");
             }
+
             try {
-                organizationType = OrganizationType.valueOf(args[0].trim().toUpperCase());
+                type = OrganizationType.valueOf(args[0].trim().toUpperCase());
             } catch (IllegalArgumentException e) {
                 throw new CommandExecutionException("unknown OrganizationType: " + args[0]);
             }
         }
 
-        return new CommandRequest(name, args, draft, targetId, address, organizationType);
+        return new CommandRequest(
+                name,
+                args,
+                draft,
+                targetId,
+                address,
+                type,
+                currentUsername,
+                currentPassword
+        );
     }
 
-    private static CommandResponse sendRequest(
+    private static ParsedCommand parse(String line) {
+        if (line.startsWith("execute_script")) {
+            String rest = line.substring("execute_script".length()).trim();
+            String[] args = rest.isEmpty() ? new String[0] : new String[]{rest};
+            return new ParsedCommand("execute_script", args);
+        }
+
+        String[] parts = line.split("\\s+");
+        String name = parts[0];
+        String[] args = new String[parts.length - 1];
+
+        for (int i = 1; i < parts.length; i++) {
+            args[i - 1] = parts[i];
+        }
+
+        return new ParsedCommand(name, args);
+    }
+
+    private static int parseId(String text) throws CommandExecutionException {
+        try {
+            return Integer.parseInt(text);
+        } catch (NumberFormatException e) {
+            throw new CommandExecutionException("id must be an integer");
+        }
+    }
+
+    private static CommandResponse send(
             ObjectOutputStream out,
             ObjectInputStream in,
             CommandRequest request
     ) throws IOException, ClassNotFoundException {
         out.writeObject(request);
         out.flush();
-        Object rawResponse = in.readObject();
-        if (!(rawResponse instanceof CommandResponse response)) {
-            return CommandResponse.error("Unexpected response from server");
+
+        Object response = in.readObject();
+
+        if (response instanceof CommandResponse commandResponse) {
+            return commandResponse;
         }
-        return response;
+
+        return CommandResponse.error("Unexpected response from server");
     }
 
-    private static void printResponse(StandardConsole console, CommandResponse response) {
+    private static void print(StandardConsole console, CommandResponse response) {
         if (response.isSuccess()) {
             console.println(response.getMessage());
         } else {
@@ -178,17 +191,27 @@ public class ClientMain {
         }
     }
 
-    private static int parsePort(String[] args) {
-        if (args.length < 2) {
-            return DEFAULT_PORT;
+    private static void updateCredentials(CommandRequest request, CommandResponse response) {
+        if (!response.isSuccess()) {
+            return;
         }
-        try {
-            return Integer.parseInt(args[1]);
-        } catch (NumberFormatException e) {
-            return DEFAULT_PORT;
+        if (!"register".equals(request.getName()) && !"login".equals(request.getName())) {
+            return;
         }
+        if (request.getArgs().length < 2) {
+            return;
+        }
+        currentUsername = request.getArgs()[0];
+        currentPassword = request.getArgs()[1];
     }
 
-    private record ParsedCommand(String name, String[] args) {
+    private static class ParsedCommand {
+        private final String name;
+        private final String[] args;
+
+        private ParsedCommand(String name, String[] args) {
+            this.name = name;
+            this.args = args;
+        }
     }
 }
