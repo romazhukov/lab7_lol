@@ -44,6 +44,7 @@ public class ClientMain {
 
             console.println("Connected to server " + host + ":" + port);
             console.println("Use register <login> <password> to create an account, login <login> <password> to sign in.");
+            console.println("Use logout to sign out from the current account.");
 
             while (true) {
                 console.print("$ ");
