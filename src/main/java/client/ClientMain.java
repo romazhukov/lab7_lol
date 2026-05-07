@@ -128,6 +128,9 @@ public class ClientMain {
             if (!(response.getData() instanceof Organization oldOrganization)) {
                 throw new CommandExecutionException("Unexpected organization data from server");
             }
+            if (!currentUsername.equals(oldOrganization.getOwnerUsername())) {
+                throw new CommandExecutionException("permission denied");
+            }
             draft = builder.readOrganizationDraftForUpdate(oldOrganization);
         }
 
