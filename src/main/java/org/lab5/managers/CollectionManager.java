@@ -155,16 +155,13 @@ public class CollectionManager {
     }
 
     public synchronized int countGreaterThanType(OrganizationType reference) {
-        if (reference == null) {
-            throw new IllegalArgumentException("reference type must not be null");
-        }
-
         int count = 0;
-        int referenceOrdinal = reference.ordinal();
 
         for (Organization organization : queue) {
             OrganizationType type = organization.getType();
-            if (type != null && type.ordinal() > referenceOrdinal) {
+            if (reference == null && type != null) {
+                count++;
+            } else if (reference != null && type != null && type.ordinal() > reference.ordinal()) {
                 count++;
             }
         }

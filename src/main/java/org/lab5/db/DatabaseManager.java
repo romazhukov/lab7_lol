@@ -6,13 +6,26 @@ import java.sql.SQLException;
 import java.sql.Statement;
 
 public class DatabaseManager {
-    private static final String URL = "jdbc:postgresql://pg:5432/studs";
+    private static final String DEFAULT_URL = "jdbc:postgresql://pg:5432/studs";
+    private final String url;
     private final String user;
     private final String password;
 
     public DatabaseManager() {
+        this.url = readOptionalSetting("DB_URL", DEFAULT_URL);
         this.user = readSetting("DB_USER");
         this.password = readSetting("DB_PASSWORD");
+    }
+
+    private String readOptionalSetting(String key, String defaultValue) {
+        String value = System.getenv(key);
+        if (value == null || value.isBlank()) {
+            value = System.getProperty(key);
+        }
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        return value;
     }
 
     private String readSetting(String key) {
@@ -27,7 +40,7 @@ public class DatabaseManager {
     }
 
     public Connection openConnection() throws SQLException {
-        return DriverManager.getConnection(URL, user, password);
+        return DriverManager.getConnection(url, user, password);
     }
 
     public void initializeSchema() throws SQLException {

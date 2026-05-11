@@ -14,6 +14,7 @@ public class InfoCommand extends AbstractCommand {
     public void execute(CommandContext ctx, String[] args) {
         CollectionManager manager = ctx.getCollectionManager();
         ctx.getConsole().println("Collection type: " + manager.getCollectionTypeName());
+        ctx.getConsole().println("Sorting: annualTurnover ascending, employeesCount ascending, name ascending, id ascending");
         ctx.getConsole().println("Initialization time: " + manager.getInitializationTime());
         ctx.getConsole().println("Elements count: " + manager.size());
     }

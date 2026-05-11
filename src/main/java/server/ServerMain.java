@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ServerMain {
     private static final int DEFAULT_PORT = 5555;
-    private static final Set<String> AUTH_FREE_COMMANDS = Set.of("register", "login", "help", "exit");
+    private static final Set<String> AUTH_FREE_COMMANDS = Set.of("register", "login", "logout", "help", "exit");
 
     public static void main(String[] args) {
         int port = args.length == 0 ? DEFAULT_PORT : Integer.parseInt(args[0]);
@@ -143,11 +143,10 @@ public class ServerMain {
             OrganizationDao organizationDao
     ) {
         try {
-            String name = request.getName();
-
-            if (name == null || name.isBlank()) {
+            if (request.getName() == null || request.getName().isBlank()) {
                 return CommandResponse.error("Command name must not be empty");
             }
+            String name = normalizeCommandName(request.getName());
 
             AuthUser authUser = auth(request, userDao, AUTH_FREE_COMMANDS.contains(name));
             if (authUser == null && !AUTH_FREE_COMMANDS.contains(name)) {
@@ -159,6 +158,8 @@ public class ServerMain {
                     return register(request, userDao);
                 case "login":
                     return login(request, userDao);
+                case "logout":
+                    return CommandResponse.ok("logged out");
                 case "add":
                     return add(request, context, organizationDao, authUser);
                 case "update":
@@ -172,7 +173,7 @@ public class ServerMain {
                 case "remove_by_id":
                     return removeById(request, context, organizationDao, authUser);
                 case "__internal_get_by_id":
-                    return getById(request, context);
+                    return getById(request, context, authUser);
                 case "clear":
                     return clear(context, organizationDao, authUser);
                 case "save":
@@ -181,9 +182,10 @@ public class ServerMain {
                     return removeHead(context, organizationDao, authUser);
                 case "count_greater_than_type":
                     return countGreaterThanType(request, context);
+                case "help":
+                    return help(commandManager, context);
                 case "show":
                 case "info":
-                case "help":
                 case "execute_script":
                 case "print_field_descending_postal_address":
                     return runOldCommand(name, request.getArgs(), commandManager, context);
@@ -366,7 +368,7 @@ public class ServerMain {
         }
     }
 
-    private static CommandResponse getById(CommandRequest request, CommandContext context) {
+    private static CommandResponse getById(CommandRequest request, CommandContext context, AuthUser authUser) {
         if (request.getTargetId() == null) {
             return CommandResponse.error("internal get_by_id requires id");
         }
@@ -374,6 +376,9 @@ public class ServerMain {
         Organization organization = context.getCollectionManager().findById(id);
         if (organization == null) {
             return CommandResponse.error("organization with id=" + id + " not found");
+        }
+        if (!authUser.userId().equals(organization.getOwnerId())) {
+            return CommandResponse.error("permission denied");
         }
         return CommandResponse.ok("Found organization id=" + id, organization);
     }
@@ -402,16 +407,28 @@ public class ServerMain {
         OrganizationType type = request.getOrganizationType();
         if (type == null) {
             if (request.getArgs().length != 1) {
-                return CommandResponse.error("usage: count_greater_than_type <type>");
+                return CommandResponse.error("usage: count_greater_than_type <type|null>");
             }
-            try {
-                type = OrganizationType.valueOf(request.getArgs()[0].trim().toUpperCase());
-            } catch (IllegalArgumentException e) {
-                return CommandResponse.error("unknown OrganizationType: " + request.getArgs()[0]);
+            if (!request.getArgs()[0].trim().equalsIgnoreCase("null")) {
+                try {
+                    type = OrganizationType.valueOf(request.getArgs()[0].trim().toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    return CommandResponse.error("unknown OrganizationType: " + request.getArgs()[0]);
+                }
             }
         }
         int count = context.getCollectionManager().countGreaterThanType(type);
         return CommandResponse.ok("count = " + count, count);
+    }
+
+    private static CommandResponse help(CommandManager commandManager, CommandContext context) {
+        CommandResponse response = runOldCommand("help", new String[0], commandManager, context);
+        String text = response.getMessage()
+                + System.lineSeparator()
+                + " - register : register <login> <password>" + System.lineSeparator()
+                + " - login : login <login> <password>" + System.lineSeparator()
+                + " - logout : log out from current account";
+        return CommandResponse.ok(text);
     }
 
     private static CommandResponse runOldCommand(
@@ -438,6 +455,14 @@ public class ServerMain {
         }
 
         return name + " " + String.join(" ", args);
+    }
+
+    private static String normalizeCommandName(String name) {
+        String normalized = name.trim().toLowerCase();
+        if (normalized.equals("remove_lover")) {
+            return "remove_lower";
+        }
+        return normalized;
     }
 
     private static int parseId(String value) {

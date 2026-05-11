@@ -7,7 +7,7 @@ import org.lab5.models.OrganizationType;
 public class CountGreaterThanTypeCommand extends AbstractCommand {
 
     public CountGreaterThanTypeCommand() {
-        super("count_greater_than_type", "count elements with type greater than given");
+        super("count_greater_than_type", "count elements with type greater than given type or null");
     }
 
     @Override
@@ -18,11 +18,15 @@ public class CountGreaterThanTypeCommand extends AbstractCommand {
         }
 
         OrganizationType type;
-        try {
-            type = OrganizationType.valueOf(args[0].trim().toUpperCase());
-        } catch (Exception e) {
-            ctx.getConsole().printError("unknown type: " + args[0]);
-            return;
+        if (args[0].trim().equalsIgnoreCase("null")) {
+            type = null;
+        } else {
+            try {
+                type = OrganizationType.valueOf(args[0].trim().toUpperCase());
+            } catch (Exception e) {
+                ctx.getConsole().printError("unknown type: " + args[0]);
+                return;
+            }
         }
 
         int count = ctx.getCollectionManager().countGreaterThanType(type);
